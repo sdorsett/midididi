@@ -15,12 +15,14 @@ this is playing awake, but this mod can be used with any norns script (in theory
 - install the mod, enable it, and restart norns
 - choose your device in the SYSTEM > MODS > MIDIDIDI menu
     - this setting is global across scripts
+    - the selected device is used for both midi input capture and recorded cc loop playback output
 - ensure that your device can send midi cc and note values simultaneously:
     - if you have a faderfox EC4 (like i do) then you'll need to [update to firmware v2.0](http://www.faderfox.de/ec4.html)
     - if you have a midi fighter twister, you'll need to configure it to send note on/off as the push event (the default is cc)
 - configure your midi device note and cc values:
     - the note id must match the cc id for the given param
     - the midi channels must be the same
+- recorded cc loops are sent back out over the selected midi device on the original recorded channel
 
 ## current shortcomings/future features
 - note on/off must be mapped to the same midi channel and cc id as the cc to be recorded. ideally this would be configurable

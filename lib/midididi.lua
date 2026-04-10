@@ -4,6 +4,7 @@ local reflection = require("reflection")
 
 local patterns = {}
 local norns_midi_event
+local output_midi_device
 
 -- try adjusting these if you find yourself accidentally clearing loops by bumping knobs
 local TOLERANCE_TIME_MS = 200 -- time after recording cc loop stops before it can be cleared
@@ -18,6 +19,24 @@ local MIDI_EVENT_CODES = {
 local on_rec_change
 local enabled_device_id
 
+local function copy_midi_msg(midi_msg)
+    local msg_copy = {}
+    for i = 1, #midi_msg do
+        msg_copy[i] = midi_msg[i]
+    end
+    return msg_copy
+end
+
+local function send_midi_output(midi_msg)
+    if output_midi_device == nil and enabled_device_id ~= nil then
+        output_midi_device = midi.connect(enabled_device_id)
+    end
+
+    if output_midi_device ~= nil and midi_msg ~= nil then
+        output_midi_device:send(midi_msg)
+    end
+end
+
 local function create_pattern(device_id, channel, event_id)
     local pattern = {}
     pattern.device_id = device_id
@@ -27,7 +46,7 @@ local function create_pattern(device_id, channel, event_id)
     pattern.loop = reflection:new()
     pattern.loop:set_loop(1)
     pattern.loop.process = function(event)
-        norns_midi_event(event.device_id, event.midi_msg)
+        send_midi_output(event.midi_msg)
     end
     table.insert(patterns, pattern)
     return pattern
@@ -78,7 +97,13 @@ local function on_midi_event(device_id, midi_msg)
             pattern.loop:clear()
         end
         pattern.last_value = value
-        pattern.loop:watch({ device_id = device_id, midi_msg = midi_msg })
+        pattern.loop:watch({
+            device_id = device_id,
+            channel = channel,
+            event_id = event_id,
+            value = value,
+            midi_msg = copy_midi_msg(midi_msg),
+        })
     end
 
     norns_midi_event(device_id, midi_msg)
@@ -93,6 +118,7 @@ function Midididi.cleanup()
     if norns_midi_event ~= nil then
         _norns.midi.event = norns_midi_event
     end
+    output_midi_device = nil
 end
 
 function Midididi.on_rec_change(callback)
@@ -101,6 +127,7 @@ end
 
 function Midididi.set_device(device_id)
     enabled_device_id = device_id
+    output_midi_device = device_id ~= nil and midi.connect(device_id) or nil
 end
 
 return Midididi
