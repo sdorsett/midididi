@@ -16,8 +16,7 @@ local midi_info = {
     channel = nil,
     event_id = nil,
     value = nil,
-    trigger_event = nil,
-    trigger_event_id = nil,
+    event_name = nil,
 }
 
 local menu_active = false
@@ -54,13 +53,7 @@ function Menu.redraw()
     local channel_text = midi_info.channel ~= nil and tostring(midi_info.channel) or "--"
     local event_id_text = midi_info.event_id ~= nil and tostring(midi_info.event_id) or "--"
     local value_text = midi_info.value ~= nil and tostring(midi_info.value) or "--"
-    local trigger_text = "--"
-
-    if midi_info.trigger_event ~= nil then
-        local trigger_id_text = midi_info.trigger_event_id ~= nil and tostring(midi_info.trigger_event_id) or "--"
-        local trigger_label = midi_info.trigger_event == "note_on" and "on" or "off"
-        trigger_text = string.format("%s %s", trigger_label, trigger_id_text)
-    end
+    local event_name = midi_info.event_name or "--"
 
     screen.font_face(1)
     screen.font_size(8)
@@ -82,14 +75,14 @@ function Menu.redraw()
     screen.text_right(string.format("%s/%s", device_id_text, channel_text))
 
     screen.move(0, 46)
-    screen.text("cc/v")
+    screen.text("evt")
     screen.move(120, 46)
-    screen.text_right(string.format("%s/%s", event_id_text, value_text))
+    screen.text_right(string.format("%s %s", event_name, event_id_text))
 
     screen.move(0, 58)
-    screen.text("trig")
+    screen.text("val")
     screen.move(120, 58)
-    screen.text_right(trigger_text)
+    screen.text_right(value_text)
 
     screen.update()
 end
@@ -112,17 +105,18 @@ function Menu.deinit()
 end
 
 function Menu.set_midi_info(device_id, channel, event_id, rec_state, value, event)
+    local event_labels = {
+        note_on = "on",
+        note_off = "off",
+        cc = "cc",
+    }
+
     midi_info.device_id = device_id
     midi_info.channel = channel
     midi_info.event_id = event_id
     midi_info.rec_state = rec_state or 0
-
-    if event == "cc" then
-        midi_info.value = value
-    elseif event == "note_on" or event == "note_off" then
-        midi_info.trigger_event = event
-        midi_info.trigger_event_id = event_id
-    end
+    midi_info.value = value
+    midi_info.event_name = event_labels[event] or event or "--"
 
     if menu_active then
         mod.menu.redraw()
