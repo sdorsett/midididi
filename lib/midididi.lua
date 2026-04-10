@@ -4,6 +4,8 @@ local reflection = require("reflection")
 
 local patterns = {}
 local norns_midi_event
+local input_midi_device
+local input_midi_passthrough_event
 local output_midi_device
 
 -- try adjusting these if you find yourself accidentally clearing loops by bumping knobs
@@ -29,16 +31,6 @@ local function copy_midi_msg(midi_msg)
     return msg_copy
 end
 
-local function send_midi_output(midi_msg)
-    if output_midi_device == nil and enabled_device_id ~= nil then
-        output_midi_device = midi.connect(enabled_device_id)
-    end
-
-    if output_midi_device ~= nil and midi_msg ~= nil then
-        output_midi_device:send(midi_msg)
-    end
-end
-
 local function notify_midi_info(device_id, channel, event_id, rec_state, value, event)
     if on_rec_change ~= nil then
         on_rec_change(device_id, channel, event_id, rec_state, value, event)
@@ -46,6 +38,30 @@ local function notify_midi_info(device_id, channel, event_id, rec_state, value, 
 
     if on_midi_info_change ~= nil then
         on_midi_info_change(device_id, channel, event_id, rec_state, value, event)
+    end
+end
+
+local function update_midi_info(device_id, midi_msg, rec_state)
+    if midi_msg == nil or midi_msg[1] == nil then
+        return
+    end
+
+    local event_code = midi_msg[1] & 0xF0
+    local channel = (midi_msg[1] & 0x0F) + 1
+    local event_id = midi_msg[2]
+    local value = midi_msg[3]
+    local event = MIDI_EVENT_CODES[event_code] or string.format("0x%X", event_code)
+
+    notify_midi_info(device_id, channel, event_id, rec_state or 0, value, event)
+end
+
+local function send_midi_output(midi_msg)
+    if output_midi_device == nil and enabled_device_id ~= nil then
+        output_midi_device = midi.connect(enabled_device_id)
+    end
+
+    if output_midi_device ~= nil and midi_msg ~= nil then
+        output_midi_device:send(midi_msg)
     end
 end
 
@@ -136,7 +152,13 @@ function Midididi.cleanup()
         _norns.midi.event = norns_midi_event
     end
 
+    if input_midi_device ~= nil then
+        input_midi_device.event = input_midi_passthrough_event
+    end
+
     norns_midi_event = nil
+    input_midi_device = nil
+    input_midi_passthrough_event = nil
     output_midi_device = nil
     patterns = {}
     initialized = false
@@ -152,6 +174,37 @@ end
 
 function Midididi.set_device(device_id)
     enabled_device_id = device_id
+
+    if input_midi_device ~= nil then
+        input_midi_device.event = input_midi_passthrough_event
+    end
+
+    input_midi_device = device_id ~= nil and midi.connect(device_id) or nil
+    input_midi_passthrough_event = nil
+
+    if input_midi_device ~= nil then
+        local passthrough_event = input_midi_device.event
+        input_midi_passthrough_event = passthrough_event
+        input_midi_device.event = function(data)
+            if enabled_device_id == device_id then
+                local rec_state = 0
+
+                if data ~= nil and data[1] ~= nil and data[2] ~= nil then
+                    local channel = (data[1] & 0x0F) + 1
+                    local event_id = data[2]
+                    local pattern = get_pattern(device_id, channel, event_id)
+                    rec_state = pattern and pattern.loop and pattern.loop.rec or 0
+                end
+
+                update_midi_info(device_id, data, rec_state)
+            end
+
+            if passthrough_event ~= nil then
+                passthrough_event(data)
+            end
+        end
+    end
+
     output_midi_device = device_id ~= nil and midi.connect(device_id) or nil
 end
 

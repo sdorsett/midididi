@@ -20,6 +20,7 @@ local midi_info = {
 }
 
 local menu_active = false
+local menu_dirty = false
 
 local function short_name(name)
     if name == nil or name == "" then
@@ -40,6 +41,7 @@ function Menu.enc(n, d)
         state.selected_device = selected_device
         Menu.on_device_change(selected_device)
     end
+    menu_dirty = true
     mod.menu.redraw()
 end
 
@@ -89,6 +91,8 @@ end
 
 function Menu.init()
     menu_active = true
+    menu_dirty = true
+
     if util.file_exists(data_file) then
         local saved_state = tab.load(data_file)
         if saved_state ~= nil and saved_state.selected_device ~= nil then
@@ -97,6 +101,18 @@ function Menu.init()
     else
         util.make_dir(data_dir)
     end
+
+    Menu.on_device_change(state.selected_device)
+
+    clock.run(function()
+        while menu_active do
+            if menu_dirty then
+                Menu.redraw()
+                menu_dirty = false
+            end
+            clock.sleep(1 / 15)
+        end
+    end)
 end
 
 function Menu.deinit()
@@ -117,6 +133,7 @@ function Menu.set_midi_info(device_id, channel, event_id, rec_state, value, even
     midi_info.rec_state = rec_state or 0
     midi_info.value = value
     midi_info.event_name = event_labels[event] or event or "--"
+    menu_dirty = true
 
     if menu_active then
         mod.menu.redraw()
