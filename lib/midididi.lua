@@ -122,16 +122,19 @@ local function on_midi_event(device_id, midi_msg)
     end
 
     if event == "note_on" then
-        pattern.loop:clear()
-        pattern.loop:set_rec(1)
+        if normalize_rec_state(pattern.loop.rec) == 1 then
+            pattern.loop:set_rec(0)
+            pattern.tolerance_time_passed = false
+            clock.run(function()
+                clock.sleep(TOLERANCE_TIME_MS / 1000)
+                pattern.tolerance_time_passed = true
+            end)
+        else
+            pattern.loop:clear()
+            pattern.loop:set_rec(1)
+        end
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event)
     elseif pattern and event == "note_off" then
-        pattern.loop:set_rec(0)
-        pattern.tolerance_time_passed = false
-        clock.run(function()
-            clock.sleep(TOLERANCE_TIME_MS / 1000)
-            pattern.tolerance_time_passed = true
-        end)
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event)
     elseif pattern and event == "cc" then
         local tolerance_distance = math.abs(pattern.last_value - value) > TOLERANCE_DISTANCE
