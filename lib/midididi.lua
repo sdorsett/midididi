@@ -31,13 +31,22 @@ local function copy_midi_msg(midi_msg)
     return msg_copy
 end
 
+local function normalize_rec_state(rec_state)
+    if rec_state == nil or rec_state == false or rec_state == 0 then
+        return 0
+    end
+    return 1
+end
+
 local function notify_midi_info(device_id, channel, event_id, rec_state, value, event)
+    local normalized_rec_state = normalize_rec_state(rec_state)
+
     if on_rec_change ~= nil then
-        on_rec_change(device_id, channel, event_id, rec_state, value, event)
+        on_rec_change(device_id, channel, event_id, normalized_rec_state, value, event)
     end
 
     if on_midi_info_change ~= nil then
-        on_midi_info_change(device_id, channel, event_id, rec_state, value, event)
+        on_midi_info_change(device_id, channel, event_id, normalized_rec_state, value, event)
     end
 end
 
