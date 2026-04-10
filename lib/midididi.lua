@@ -17,6 +17,7 @@ local MIDI_EVENT_CODES = {
 }
 
 local on_rec_change
+local on_midi_info_change
 local enabled_device_id
 
 local function copy_midi_msg(midi_msg)
@@ -34,6 +35,16 @@ local function send_midi_output(midi_msg)
 
     if output_midi_device ~= nil and midi_msg ~= nil then
         output_midi_device:send(midi_msg)
+    end
+end
+
+local function notify_midi_info(device_id, channel, event_id, rec_state, value, event)
+    if on_rec_change ~= nil then
+        on_rec_change(device_id, channel, event_id, rec_state, value, event)
+    end
+
+    if on_midi_info_change ~= nil then
+        on_midi_info_change(device_id, channel, event_id, rec_state, value, event)
     end
 end
 
@@ -78,9 +89,7 @@ local function on_midi_event(device_id, midi_msg)
     if event == "note_on" then
         pattern.loop:clear()
         pattern.loop:set_rec(1)
-        if on_rec_change ~= nil then
-            on_rec_change(device_id, channel, event_id, 1)
-        end
+        notify_midi_info(device_id, channel, event_id, 1, nil, event)
     elseif pattern and event == "note_off" then
         pattern.loop:set_rec(0)
         pattern.tolerance_time_passed = false
@@ -88,9 +97,7 @@ local function on_midi_event(device_id, midi_msg)
             clock.sleep(TOLERANCE_TIME_MS / 1000)
             pattern.tolerance_time_passed = true
         end)
-        if on_rec_change ~= nil then
-            on_rec_change(device_id, channel, event_id, 0)
-        end
+        notify_midi_info(device_id, channel, event_id, 0, nil, event)
     elseif pattern and event == "cc" then
         local tolerance_distance = math.abs(pattern.last_value - value) > TOLERANCE_DISTANCE
         if pattern.loop.rec == 0 and tolerance_distance and pattern.tolerance_time_passed then
@@ -104,6 +111,7 @@ local function on_midi_event(device_id, midi_msg)
             value = value,
             midi_msg = copy_midi_msg(midi_msg),
         })
+        notify_midi_info(device_id, channel, event_id, pattern.loop.rec, value, event)
     end
 
     norns_midi_event(device_id, midi_msg)
@@ -123,6 +131,10 @@ end
 
 function Midididi.on_rec_change(callback)
     on_rec_change = callback
+end
+
+function Midididi.on_midi_info_change(callback)
+    on_midi_info_change = callback
 end
 
 function Midididi.set_device(device_id)

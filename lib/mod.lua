@@ -19,5 +19,6 @@ mod.hook.register("script_post_cleanup", "midididi remove norns midi event hook"
 end)
 
 menu.on_device_change = midididi.set_device
+midididi.on_midi_info_change(menu.set_midi_info)
 
 mod.menu.register(mod.this_name, menu)

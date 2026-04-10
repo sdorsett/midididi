@@ -10,7 +10,22 @@ local state = {
     selected_device = 1,
 }
 
+local midi_info = {
+    rec_state = 0,
+    device_id = nil,
+    channel = nil,
+    event_id = nil,
+    value = nil,
+    trigger_event = nil,
+    trigger_event_id = nil,
+}
+
+local menu_active = false
+
 local function short_name(name)
+    if name == nil or name == "" then
+        return "none"
+    end
     return string.len(name) <= 6 and name or util.acronym(name)
 end
 
@@ -31,27 +46,87 @@ end
 
 function Menu.redraw()
     screen.clear()
-    local device_name = short_name(midi.vports[state.selected_device].name)
+
+    local vport = midi.vports[state.selected_device]
+    local device_name = short_name(vport and vport.name)
+    local status = midi_info.rec_state == 1 and "recording" or "idle"
+    local device_id_text = midi_info.device_id ~= nil and tostring(midi_info.device_id) or "--"
+    local channel_text = midi_info.channel ~= nil and tostring(midi_info.channel) or "--"
+    local event_id_text = midi_info.event_id ~= nil and tostring(midi_info.event_id) or "--"
+    local value_text = midi_info.value ~= nil and tostring(midi_info.value) or "--"
+    local trigger_text = "--"
+
+    if midi_info.trigger_event ~= nil then
+        local trigger_id_text = midi_info.trigger_event_id ~= nil and tostring(midi_info.trigger_event_id) or "--"
+        local trigger_label = midi_info.trigger_event == "note_on" and "on" or "off"
+        trigger_text = string.format("%s %s", trigger_label, trigger_id_text)
+    end
+
     screen.font_face(1)
     screen.font_size(8)
     screen.level(15)
+
     screen.move(0, 10)
-    screen.text("midi in")
+    screen.text("in")
     screen.move(120, 10)
-    screen.text_right(string.format("%d (%s)", state.selected_device, device_name))
+    screen.text_right(string.format("%d %s", state.selected_device, device_name))
+
+    screen.move(0, 22)
+    screen.text("st")
+    screen.move(120, 22)
+    screen.text_right(status)
+
+    screen.move(0, 34)
+    screen.text("d/ch")
+    screen.move(120, 34)
+    screen.text_right(string.format("%s/%s", device_id_text, channel_text))
+
+    screen.move(0, 46)
+    screen.text("cc/v")
+    screen.move(120, 46)
+    screen.text_right(string.format("%s/%s", event_id_text, value_text))
+
+    screen.move(0, 58)
+    screen.text("trig")
+    screen.move(120, 58)
+    screen.text_right(trigger_text)
+
     screen.update()
 end
 
 function Menu.init()
+    menu_active = true
     if util.file_exists(data_file) then
-        state = tab.load(data_file)
+        local saved_state = tab.load(data_file)
+        if saved_state ~= nil and saved_state.selected_device ~= nil then
+            state.selected_device = saved_state.selected_device
+        end
     else
         util.make_dir(data_dir)
     end
 end
 
 function Menu.deinit()
+    menu_active = false
     tab.save(state, data_file)
+end
+
+function Menu.set_midi_info(device_id, channel, event_id, rec_state, value, event)
+    midi_info.device_id = device_id
+    midi_info.channel = channel
+    midi_info.event_id = event_id
+    midi_info.rec_state = rec_state or 0
+
+    if event == "cc" then
+        midi_info.value = value
+    elseif event == "note_on" or event == "note_off" then
+        midi_info.trigger_event = event
+        midi_info.trigger_event_id = event_id
+    end
+
+    if menu_active then
+        mod.menu.redraw()
+    end
 end
 
 function Menu.on_device_change(_) end
