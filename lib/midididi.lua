@@ -19,6 +19,7 @@ local MIDI_EVENT_CODES = {
 local on_rec_change
 local on_midi_info_change
 local enabled_device_id
+local initialized = false
 
 local function copy_midi_msg(midi_msg)
     local msg_copy = {}
@@ -118,15 +119,24 @@ local function on_midi_event(device_id, midi_msg)
 end
 
 function Midididi.init()
+    if initialized or _norns.midi.event == on_midi_event then
+        return
+    end
+
     norns_midi_event = _norns.midi.event
     _norns.midi.event = on_midi_event
+    initialized = true
 end
 
 function Midididi.cleanup()
-    if norns_midi_event ~= nil then
+    if initialized and norns_midi_event ~= nil and _norns.midi.event == on_midi_event then
         _norns.midi.event = norns_midi_event
     end
+
+    norns_midi_event = nil
     output_midi_device = nil
+    patterns = {}
+    initialized = false
 end
 
 function Midididi.on_rec_change(callback)

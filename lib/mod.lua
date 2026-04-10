@@ -1,6 +1,6 @@
 local mod = require("core/mods")
-local menu = include("midididi/lib/menu")
-local midididi = include("midididi/lib/midididi")
+local menu = require("midididi/lib/menu")
+local midididi = require("midididi/lib/midididi")
 local data_file = _path.data .. mod.this_name .. "/mod.state"
 
 mod.hook.register("script_pre_init", "midididi remove norns midi event hook", function()

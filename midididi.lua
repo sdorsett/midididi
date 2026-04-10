@@ -1,6 +1,6 @@
 --- midididi
 
-local midididi = include("lib/midididi")
+local midididi = require("midididi/lib/midididi")
 local screen_dirty = false
 
 rec_states = {}
@@ -22,7 +22,6 @@ function init()
         end
     end)
 
-    midididi.init()
     midididi.on_rec_change(function(device_id, channel, event_id, rec_state)
         for param, pmap in pairs(norns.pmap.data) do
             if pmap.dev == device_id and pmap.ch == channel and pmap.cc == event_id then
