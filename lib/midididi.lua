@@ -22,6 +22,7 @@ local MIDI_EVENT_CODES = {
 
 local on_rec_change
 local on_midi_info_change
+local selected_port
 local enabled_device_id
 local initialized = false
 
@@ -234,8 +235,7 @@ function Midididi.on_midi_info_change(callback)
 end
 
 function Midididi.set_device(device_id)
-    enabled_device_id = device_id
-    debug_log(string.format("selected device=%s", tostring(device_id)))
+    selected_port = device_id
 
     if input_midi_device ~= nil then
         input_midi_device.event = input_midi_passthrough_event
@@ -243,14 +243,27 @@ function Midididi.set_device(device_id)
 
     input_midi_device = device_id ~= nil and midi.connect(device_id) or nil
     input_midi_passthrough_event = nil
+    enabled_device_id = input_midi_device and input_midi_device.id or device_id
+
+    debug_log(string.format(
+        "selected port=%s resolved_device_id=%s name=%s",
+        tostring(selected_port),
+        tostring(enabled_device_id),
+        tostring(input_midi_device and input_midi_device.name or "nil")
+    ))
 
     if input_midi_device ~= nil then
         local passthrough_event = input_midi_device.event
         input_midi_passthrough_event = passthrough_event
         input_midi_device.event = function(data)
-            if enabled_device_id == device_id then
-                debug_log(string.format("port_event dev=%s raw=[%s]", tostring(device_id), format_midi_msg(data)))
-                update_midi_info(device_id, data, get_device_rec_state(device_id))
+            if selected_port == device_id then
+                debug_log(string.format(
+                    "port_event port=%s resolved_device_id=%s raw=[%s]",
+                    tostring(device_id),
+                    tostring(enabled_device_id),
+                    format_midi_msg(data)
+                ))
+                update_midi_info(enabled_device_id, data, get_device_rec_state(enabled_device_id))
             end
 
             if passthrough_event ~= nil then
@@ -259,7 +272,7 @@ function Midididi.set_device(device_id)
         end
     end
 
-    output_midi_device = device_id ~= nil and midi.connect(device_id) or nil
+    output_midi_device = input_midi_device
 end
 
 return Midididi
