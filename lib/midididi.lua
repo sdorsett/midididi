@@ -52,6 +52,20 @@ local function copy_midi_msg(midi_msg)
     return msg_copy
 end
 
+local function resolve_device_id(vport, fallback_id)
+    if vport ~= nil then
+        if vport.device ~= nil and vport.device.id ~= nil then
+            return vport.device.id
+        end
+
+        if vport.id ~= nil then
+            return vport.id
+        end
+    end
+
+    return fallback_id
+end
+
 local function normalize_rec_state(rec_state)
     if rec_state == nil or rec_state == false or rec_state == 0 then
         return 0
@@ -86,8 +100,8 @@ local function update_midi_info(device_id, midi_msg, rec_state)
 end
 
 local function send_midi_output(midi_msg)
-    if output_midi_device == nil and enabled_device_id ~= nil then
-        output_midi_device = midi.connect(enabled_device_id)
+    if output_midi_device == nil and selected_port ~= nil then
+        output_midi_device = midi.connect(selected_port)
     end
 
     if output_midi_device ~= nil and midi_msg ~= nil then
@@ -243,13 +257,14 @@ function Midididi.set_device(device_id)
 
     input_midi_device = device_id ~= nil and midi.connect(device_id) or nil
     input_midi_passthrough_event = nil
-    enabled_device_id = input_midi_device and input_midi_device.id or device_id
+    enabled_device_id = resolve_device_id(input_midi_device, device_id)
 
     debug_log(string.format(
-        "selected port=%s resolved_device_id=%s name=%s",
+        "selected port=%s resolved_device_id=%s name=%s raw_vport_id=%s",
         tostring(selected_port),
         tostring(enabled_device_id),
-        tostring(input_midi_device and input_midi_device.name or "nil")
+        tostring(input_midi_device and input_midi_device.name or "nil"),
+        tostring(input_midi_device and input_midi_device.id or "nil")
     ))
 
     if input_midi_device ~= nil then
