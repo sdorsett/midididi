@@ -8,6 +8,8 @@ local input_midi_device
 local input_midi_passthrough_event
 local output_midi_device
 
+local DEBUG_MIDI = true
+
 -- try adjusting these if you find yourself accidentally clearing loops by bumping knobs
 local TOLERANCE_TIME_MS = 200 -- time after recording cc loop stops before it can be cleared
 local TOLERANCE_DISTANCE = 0 -- difference between cc values after cc loop stops before it can be cleared
@@ -22,6 +24,24 @@ local on_rec_change
 local on_midi_info_change
 local enabled_device_id
 local initialized = false
+
+local function debug_log(message)
+    if DEBUG_MIDI then
+        print("[midididi] " .. message)
+    end
+end
+
+local function format_midi_msg(midi_msg)
+    if midi_msg == nil then
+        return "nil"
+    end
+
+    local parts = {}
+    for i = 1, #midi_msg do
+        parts[i] = tostring(midi_msg[i])
+    end
+    return table.concat(parts, " ")
+end
 
 local function copy_midi_msg(midi_msg)
     local msg_copy = {}
@@ -75,6 +95,8 @@ local function send_midi_output(midi_msg)
 end
 
 local function create_pattern(device_id, channel, event_id)
+    debug_log(string.format("create_pattern dev=%s ch=%s id=%s", tostring(device_id), tostring(channel), tostring(event_id)))
+
     local pattern = {}
     pattern.device_id = device_id
     pattern.channel = channel
@@ -108,6 +130,7 @@ end
 
 local function on_midi_event(device_id, midi_msg)
     if device_id ~= enabled_device_id then
+        debug_log(string.format("ignore dev=%s selected=%s raw=[%s]", tostring(device_id), tostring(enabled_device_id), format_midi_msg(midi_msg)))
         norns_midi_event(device_id, midi_msg)
         return
     end
@@ -116,6 +139,19 @@ local function on_midi_event(device_id, midi_msg)
     local event_id = midi_msg[2]
     local event = MIDI_EVENT_CODES[event_code]
     local value = midi_msg[3]
+    local rec_before = get_device_rec_state(device_id)
+
+    debug_log(string.format(
+        "hook dev=%s event=%s ch=%s id=%s val=%s rec_before=%s raw=[%s]",
+        tostring(device_id),
+        tostring(event or string.format("0x%X", event_code)),
+        tostring(channel),
+        tostring(event_id),
+        tostring(value),
+        tostring(rec_before),
+        format_midi_msg(midi_msg)
+    ))
+
     local pattern = get_pattern(device_id, channel, event_id)
     if pattern == nil then
         pattern = create_pattern(device_id, channel, event_id)
@@ -129,17 +165,21 @@ local function on_midi_event(device_id, midi_msg)
                 clock.sleep(TOLERANCE_TIME_MS / 1000)
                 pattern.tolerance_time_passed = true
             end)
+            debug_log(string.format("toggle rec OFF dev=%s ch=%s id=%s", tostring(device_id), tostring(channel), tostring(event_id)))
         else
             pattern.loop:clear()
             pattern.loop:set_rec(1)
+            debug_log(string.format("toggle rec ON dev=%s ch=%s id=%s", tostring(device_id), tostring(channel), tostring(event_id)))
         end
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event)
     elseif pattern and event == "note_off" then
+        debug_log(string.format("note_off dev=%s ch=%s id=%s rec_now=%s", tostring(device_id), tostring(channel), tostring(event_id), tostring(get_device_rec_state(device_id))))
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event)
     elseif pattern and event == "cc" then
         local tolerance_distance = math.abs(pattern.last_value - value) > TOLERANCE_DISTANCE
         if pattern.loop.rec == 0 and tolerance_distance and pattern.tolerance_time_passed then
             pattern.loop:clear()
+            debug_log(string.format("clear loop dev=%s ch=%s id=%s due_to_cc_change=%s", tostring(device_id), tostring(channel), tostring(event_id), tostring(value)))
         end
         pattern.last_value = value
         pattern.loop:watch({
@@ -149,6 +189,7 @@ local function on_midi_event(device_id, midi_msg)
             value = value,
             midi_msg = copy_midi_msg(midi_msg),
         })
+        debug_log(string.format("watch cc dev=%s ch=%s id=%s val=%s rec_now=%s", tostring(device_id), tostring(channel), tostring(event_id), tostring(value), tostring(get_device_rec_state(device_id))))
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event)
     else
         notify_midi_info(device_id, channel, event_id, get_device_rec_state(device_id), value, event or string.format("0x%X", event_code))
@@ -194,6 +235,7 @@ end
 
 function Midididi.set_device(device_id)
     enabled_device_id = device_id
+    debug_log(string.format("selected device=%s", tostring(device_id)))
 
     if input_midi_device ~= nil then
         input_midi_device.event = input_midi_passthrough_event
@@ -207,6 +249,7 @@ function Midididi.set_device(device_id)
         input_midi_passthrough_event = passthrough_event
         input_midi_device.event = function(data)
             if enabled_device_id == device_id then
+                debug_log(string.format("port_event dev=%s raw=[%s]", tostring(device_id), format_midi_msg(data)))
                 update_midi_info(device_id, data, get_device_rec_state(device_id))
             end
 
